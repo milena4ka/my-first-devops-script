@@ -1,0 +1,24 @@
+services:
+  app:
+    build: .
+    image: milena-app:v2
+    depends_on:
+      - db
+
+  db:
+    image: redis:alpine
+    volumes:
+      - redis_data:/data
+
+  # כלי חלופי וקל הרבה יותר לראייה ויזואלית
+  dashboard:
+    image: rediscommander/redis-commander:latest
+    environment:
+      - REDIS_HOSTS=local:db:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - db
+
+volumes:
+  redis_data:
