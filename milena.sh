@@ -1,35 +1,47 @@
 #!/bin/sh
-echo "Starting Milena's All-Key Monitoring Service..."
+# הגדרת צבעים להודעות בטרמינל
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
 
-# משתנה שישמור את רשימת המפתחות שכבר ראינו
+echo -e "${GREEN}🚀 Milena's Advanced Monitoring Service is LIVE...${NC}"
+
+# רשימת מפתחות שכבר ראינו
 KNOWN_KEYS=""
 
-while true; do
-  # 1. קבלת רשימה של כל המפתחות הקיימים ב-Redis
-  CURRENT_KEYS=$(redis-cli -h db KEYS "*")
+# עדכון סטטוס התחלה ב-Redis
+redis-cli -h db SET system_status "Running since $(date)"
 
+while true; do
+  # 1. בדיקת פקודת חירום (Kill Switch)
+  EMERGENCY=$(redis-cli -h db GET emergency)
+  if [ "$EMERGENCY" = "STOP" ]; then
+    echo -e "${RED}🚨🚨🚨 EMERGENCY STOP RECEIVED! 🚨🚨🚨${NC}"
+    
+    # עדכון סטטוס יציאה ב-Redis - כדי שנדע בדפדפן למה זה נעצר
+    redis-cli -h db SET system_status "Stopped manually at $(date)"
+    redis-cli -h db SET emergency "COMPLETED"
+    
+    echo "System is shutting down... Goodbye Milena."
+    break 
+  fi
+
+  # 2. סריקת כל המפתחות בבסיס הנתונים
+  CURRENT_KEYS=$(redis-cli -h db KEYS "*")
   for KEY in $CURRENT_KEYS; do
-    # בדיקה אם המפתח קיים ברשימת המפתחות המוכרים שלנו
     case "$KNOWN_KEYS" in
-      *"|$KEY|"*) ;; # אם הוא כבר מוכר, לא עושים כלום
+      *"|$KEY|"*) ;; # מפתח מוכר, דלג
       *) 
-        # אם הוא חדש - מתריעים!
         VALUE=$(redis-cli -h db GET "$KEY")
-        echo "------------------------------------------"
-        echo "🚀 ALERT: NEW KEY DETECTED ANYWHERE!"
-        echo "Key Name: $KEY"
-        echo "Value: $VALUE"
-        echo "------------------------------------------"
-        
-        # הוספת המפתח לרשימת המוכרים
+        echo -e "${YELLOW}✨ Discovery:${NC} New Key [${GREEN}$KEY${NC}] = $VALUE"
         KNOWN_KEYS="$KNOWN_KEYS|$KEY|"
         ;;
     esac
   done
 
-  # עדכון המפתח הרגיל כדי להראות שהמערכת חיה
-  DATE=$(date)
-  redis-cli -h db SET last_check "$DATE"
+  # 3. עדכון דופק (Heartbeat) - סימן חיים בדפדפן
+  redis-cli -h db SET last_heartbeat "$(date)"
   
-  sleep 5 # הורדתי ל-5 שניות כדי שזה יגיב מהר יותר
+  sleep 5
 done
